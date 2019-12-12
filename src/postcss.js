@@ -11,8 +11,8 @@ module.exports = postcss.plugin('MediaQueryPostCSS', options => {
     function addToStore(name, atRule) {
 
         const css = postcss.root().append(atRule).toString();
-        const query = atRule.params;
-        
+        const query = atRule.params || '';
+
         store.addMedia(name, css, options.path, query);
     }
 
@@ -34,16 +34,33 @@ module.exports = postcss.plugin('MediaQueryPostCSS', options => {
 
     return (css, result) => {
 
-        css.walkAtRules('media', atRule => {
+        css.walk(node => {
+            if(node.type === 'atrule' && node.name === 'media'){
+                const queryname = options.queries[node.params];
 
-            const queryname = options.queries[atRule.params];
+                if (queryname) {
+                    const groupName = getGroupName(options.basename);
+                    const name = groupName ? `${groupName}-${queryname}` : `${options.basename}-${queryname}`;
 
-            if (queryname) {
-                const groupName = getGroupName(options.basename);
-                const name = groupName ? `${groupName}-${queryname}` : `${options.basename}-${queryname}`;
-                
-                addToStore(name, atRule);
-                atRule.remove();
+                    addToStore(name, node);
+                    node.remove();
+                    return;
+                }
+            }
+            if(node.type === 'rule' && options.selectors){
+                // node.selector
+                for(const queryname in options.selectors){
+                    let inList = options.selectors[queryname].reduce((r, el) => { return r || node.selector.startsWith(el) }, false);
+
+                    if(inList){
+                        const groupName = getGroupName(options.basename);
+                        const name = groupName ? `${groupName}-${queryname}` : `${options.basename}-${queryname}`;
+
+                        addToStore(name, node);
+                        node.remove();
+                        return;
+                    }
+                }
             }
         });
     };
